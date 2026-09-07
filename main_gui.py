@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import dataclasses
 import math
-import random
 
 import pygame
 import pygame_gui
@@ -170,8 +169,6 @@ class StartState(EngineState):
         ball_count = 2
         for _ in range(ball_count):
             ball = Ball(self.home_zone.pos)
-            #ball.acc.x = random.randint(1, 8) * random.choice([-1, 1])
-            #ball.acc.y = random.randint(1, 8) * random.choice([-1, 1])
             ball.pos.x = ball.pos.x + math.cos(_ / ball_count * 2 * math.pi) * 64
             ball.pos.y = ball.pos.y + math.sin(_ / ball_count * 2 * math.pi) * 64
             self.balls.append(ball)
