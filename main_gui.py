@@ -167,47 +167,64 @@ class StartState(EngineState):
         self.home_zone = BallSpawner(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 64)
         self.cursor = self.home_zone.pos
         self.balls = list()
-        for _ in range(8):
+        ball_count = 2
+        for _ in range(ball_count):
             ball = Ball(self.home_zone.pos)
-            ball.acc.x = random.randint(1, 8) * random.choice([-1, 1])
-            ball.acc.y = random.randint(1, 8) * random.choice([-1, 1])
-            ball.pos.x = ball.pos.x + math.cos(_ / 16 * 2 * math.pi) * 64
-            ball.pos.y = ball.pos.y + math.sin(_ / 16 * 2 * math.pi) * 64
+            #ball.acc.x = random.randint(1, 8) * random.choice([-1, 1])
+            #ball.acc.y = random.randint(1, 8) * random.choice([-1, 1])
+            ball.pos.x = ball.pos.x + math.cos(_ / ball_count * 2 * math.pi) * 64
+            ball.pos.y = ball.pos.y + math.sin(_ / ball_count * 2 * math.pi) * 64
             self.balls.append(ball)
+
+    def handle_event(self, event):
+        if event.type == pygame.QUIT:
+            return
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            self.add_ball()
+
+    def add_ball(self):
+        ball = Ball(self.home_zone.pos)
+        idx = len(self.balls)
+        ball.pos.x = ball.pos.x + math.cos((idx % 6) / 6 * 2 * math.pi) * 64
+        ball.pos.y = ball.pos.y + math.sin((idx % 6) / 6 * 2 * math.pi) * 64
+        self.balls.append(ball)
 
     def update(self, dt):
         x, y = get_user_input_tuple()
+        mouse_pos = pygame.mouse.get_pos()
 
-        self.cursor.update(pygame.mouse.get_pos())
+        self.cursor.update(mouse_pos)
 
         for ball in self.balls:
             update_basic_physics(dt, ball)
             update_bounce_off_screen(dt, ball)
             #update_wrap_around_screen(dt, ball)
 
-        m1, m2, m3 = pygame.mouse.get_pressed()
+        #m1, m2, m3 = pygame.mouse.get_just_pressed()
+
         cohesions = tuple(calc_cohesion_vectors(self.balls))
         separations = tuple(calc_separation_vectors(self.balls))
         alignments = tuple(calc_alignment_vectors(self.balls))
         for i, ball in enumerate(self.balls):
             ball.acc += cohesions[i] + separations[i] + alignments[i]
             ball.acc -= ball.vel
-            if m1:
-                vec2_to_mouse = pygame.mouse.get_pos() - ball.pos
-                ball.acc += vec2_to_mouse
+            vec2_to_mouse = pygame.mouse.get_pos() - ball.pos
+            ball.acc += vec2_to_mouse
             if ball.acc.length() > 1:
                 ball.acc.scale_to_length(1)
 
     def render(self, surface):
-        surface.fill(pygame.Color("#505050"))
+        surface.fill(pygame.Color("#000000"))
 
-        render_ball_spawner(surface, "#FF0000", self.home_zone)
+        #render_ball_spawner(surface, "#FF0000", self.home_zone)
 
         radius = 8.0
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
 
-        for ball in self.balls:
-            pygame.draw.circle(surface, "#800000", ball.pos, radius)
+        for i, ball in enumerate(self.balls):
+            color = pygame.Color.from_hsva(i / len(self.balls) * 360, 100, 100,
+                                           100)
+            pygame.draw.circle(surface, color, ball.pos, radius)
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
             "starting state", False,
@@ -220,7 +237,7 @@ class StartState(EngineState):
 class StopState(EngineState):
     def render(self, surface):
         font = pygame.font.SysFont("Courier New", 32)
-        surface.fill(pygame.Color("#505050"))
+        surface.fill(pygame.Color("#000000"))
         font_surf = font.render(
             "stop state", False,
             (255, 255, 255),
@@ -247,7 +264,7 @@ class SplashState(EngineState):
     def render(self, surface):
         # TODO: DRY this up
         font = pygame.font.SysFont("Courier New", 32)
-        surface.fill(pygame.Color("#505050"))
+        surface.fill(pygame.Color("#000000"))
         font_surf = font.render(
             "splash state", False,
             (255, 255, 255),
