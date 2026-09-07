@@ -68,10 +68,11 @@ class Ball:
 
 
 def update_basic_physics(dt, obj):
+    friction = 1
     obj.vel += obj.acc
     obj.pos += obj.vel
     obj.acc *= 0
-    #obj.vel *= .9
+    obj.vel *= friction
 
 
 def update_bounce_off_screen(dt, obj):
@@ -139,8 +140,8 @@ def calc_separation_vectors(boids):
 
             pos_diff = boid.pos - other_boid.pos
             if 0 < pos_diff.length() < min_distance:
-                heading += pos_diff * (min_distance / distance)
-        yield heading
+                heading += pos_diff * (min_distance - distance) * min_distance
+        yield heading / len(boids)
 
 
 def render_ball_spawner(surface, color, instance):
@@ -166,7 +167,7 @@ class StartState(EngineState):
         self.home_zone = BallSpawner(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 64)
         self.cursor = self.home_zone.pos
         self.balls = list()
-        for _ in range(32):
+        for _ in range(8):
             ball = Ball(self.home_zone.pos)
             ball.acc.x = random.randint(1, 8) * random.choice([-1, 1])
             ball.acc.y = random.randint(1, 8) * random.choice([-1, 1])
@@ -190,8 +191,12 @@ class StartState(EngineState):
         alignments = tuple(calc_alignment_vectors(self.balls))
         for i, ball in enumerate(self.balls):
             ball.acc += cohesions[i] + separations[i] + alignments[i]
-            ball.acc.normalize_ip()
             ball.acc -= ball.vel
+            if m1:
+                vec2_to_mouse = pygame.mouse.get_pos() - ball.pos
+                ball.acc += vec2_to_mouse
+            if ball.acc.length() > 1:
+                ball.acc.scale_to_length(1)
 
     def render(self, surface):
         surface.fill(pygame.Color("#505050"))
