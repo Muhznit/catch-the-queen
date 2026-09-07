@@ -71,7 +71,7 @@ def update_basic_physics(dt, obj):
     obj.vel += obj.acc
     obj.pos += obj.vel
     obj.acc *= 0
-    obj.vel *= .9
+    #obj.vel *= .9
 
 
 def update_bounce_off_screen(dt, obj):
@@ -88,6 +88,18 @@ def update_bounce_off_screen(dt, obj):
         obj.vel.x -= obj.pos.x - old_x
         obj.vel.x *= -1
 
+    if future_pos.y > WINDOW_HEIGHT:
+        old_y = obj.pos.y
+        obj.pos.y = WINDOW_HEIGHT
+        obj.vel.y -= obj.pos.y - old_y
+        obj.vel.y *= -1
+
+    if future_pos.y < 0:
+        old_y = obj.pos.y
+        obj.pos.y = 0
+        obj.vel.y -= obj.pos.y - old_y
+        obj.vel.y *= -1
+
 
 def update_wrap_around_screen(dt, obj):
     obj.pos.x = (WINDOW_WIDTH + obj.pos.x) % WINDOW_WIDTH
@@ -103,7 +115,7 @@ def calc_cohesion_vectors(boids):
 
     for boid in boids:
         direction = midpoint - boid.pos
-        direction.normalize_ip()
+        #direction.normalize_ip()
         yield direction
 
 
@@ -111,22 +123,23 @@ def calc_alignment_vectors(boids):
     heading = pygame.math.Vector2(0, 0)
     for boid in boids:
         heading += boid.vel
-    heading.normalize_ip()
+    heading /= len(boids)
+    #heading.normalize_ip()
 
     for boid in boids:
         yield heading
 
 
 def calc_separation_vectors(boids):
-    min_distance = 8
+    min_distance = 64
     for boid in boids:
         heading = pygame.math.Vector2(0, 0)
         for other_boid in boids:
             distance = boid.pos.distance_to(other_boid.pos)
 
             pos_diff = boid.pos - other_boid.pos
-            if pos_diff.length() < min_distance:
-                heading += pos_diff
+            if 0 < pos_diff.length() < min_distance:
+                heading += pos_diff * (min_distance / distance)
         yield heading
 
 
@@ -153,7 +166,7 @@ class StartState(EngineState):
         self.home_zone = BallSpawner(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 64)
         self.cursor = self.home_zone.pos
         self.balls = list()
-        for _ in range(16):
+        for _ in range(32):
             ball = Ball(self.home_zone.pos)
             ball.acc.x = random.randint(1, 8) * random.choice([-1, 1])
             ball.acc.y = random.randint(1, 8) * random.choice([-1, 1])
@@ -168,16 +181,17 @@ class StartState(EngineState):
 
         for ball in self.balls:
             update_basic_physics(dt, ball)
-            #update_bounce_off_screen(dt, ball)
-            update_wrap_around_screen(dt, ball)
+            update_bounce_off_screen(dt, ball)
+            #update_wrap_around_screen(dt, ball)
 
+        m1, m2, m3 = pygame.mouse.get_pressed()
         cohesions = tuple(calc_cohesion_vectors(self.balls))
         separations = tuple(calc_separation_vectors(self.balls))
         alignments = tuple(calc_alignment_vectors(self.balls))
         for i, ball in enumerate(self.balls):
             ball.acc += cohesions[i] + separations[i] + alignments[i]
-            if ball.acc.length() > 4:
-                ball.acc.scale_to_length(4)
+            ball.acc.normalize_ip()
+            ball.acc -= ball.vel
 
     def render(self, surface):
         surface.fill(pygame.Color("#505050"))
