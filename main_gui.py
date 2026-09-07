@@ -50,14 +50,8 @@ class EngineState:
 
 @dataclasses.dataclass(slots=True)
 class BallSpawner:
-    x: int
-    y: int
-    radius: float
-
-    @property
-    def pos(self):
-        return pygame.math.Vector2(self.x, self.y)
-
+    pos: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
+    radius: float = 64
 
 @dataclasses.dataclass(slots=True)
 class Ball:
@@ -163,12 +157,13 @@ def render_crosshair(surface, color, center, radius):
 # Application States: States that the whole app can be in.
 class StartState(EngineState):
     def __init__(self):
-        self.home_zone = BallSpawner(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 64)
-        self.cursor = self.home_zone.pos
+        window_center = pygame.math.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
+        self.home_zone = BallSpawner(window_center.copy(), 64)
+        self.cursor = pygame.math.Vector2()
         self.balls = list()
         ball_count = 2
         for _ in range(ball_count):
-            ball = Ball(self.home_zone.pos)
+            ball = Ball(self.home_zone.pos.copy())
             ball.pos.x = ball.pos.x + math.cos(_ / ball_count * 2 * math.pi) * 64
             ball.pos.y = ball.pos.y + math.sin(_ / ball_count * 2 * math.pi) * 64
             self.balls.append(ball)
@@ -180,7 +175,7 @@ class StartState(EngineState):
             self.add_ball()
 
     def add_ball(self):
-        ball = Ball(self.home_zone.pos)
+        ball = Ball(self.home_zone.pos.copy())
         idx = len(self.balls)
         ball.pos.x = ball.pos.x + math.cos((idx % 6) / 6 * 2 * math.pi) * 64
         ball.pos.y = ball.pos.y + math.sin((idx % 6) / 6 * 2 * math.pi) * 64
