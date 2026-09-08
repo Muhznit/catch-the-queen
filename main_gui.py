@@ -61,14 +61,12 @@ class Ball:
 
 
 def update_basic_physics(dt, obj):
-    friction = .8
     obj.vel += obj.acc
     obj.pos += obj.vel
     obj.acc *= 0
     if obj.vel.length() > 0:
-        obj.vel = min(obj.vel, obj.vel.normalize() * 16,
+        obj.vel = min(obj.vel, obj.vel.normalize() * 32,
                       key=pygame.math.Vector2.magnitude)
-    #obj.vel *= friction
 
 
 def update_bounce_off_screen(dt, obj):
@@ -159,6 +157,17 @@ def render_crosshair(surface, color, center, radius):
         (center.x + radius, center.y)
     )
 
+def render_boid(surface, color, boid):
+    heading = boid.vel
+    if heading.length():
+        heading = heading.normalize() * 8
+    tip = boid.pos + heading
+    rt_tip = boid.pos + heading.rotate(120)
+    lf_tip = boid.pos + heading.rotate(-120)
+    tail = boid.pos - boid.vel
+    pygame.draw.line(surface, color, tip, rt_tip)
+    pygame.draw.line(surface, color, tip, lf_tip)
+    pygame.draw.line(surface, color, boid.pos, tail)
 
 # Application States: States that the whole app can be in.
 class StartState(EngineState):
@@ -226,7 +235,7 @@ class StartState(EngineState):
         for i, ball in enumerate(self.balls):
             mod_idx = i % 6
             color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
-            pygame.draw.circle(surface, color, ball.pos, radius)
+            render_boid(surface, color, ball)
 
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
