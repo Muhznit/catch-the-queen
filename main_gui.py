@@ -61,11 +61,14 @@ class Ball:
 
 
 def update_basic_physics(dt, obj):
-    friction = 1
+    friction = .8
     obj.vel += obj.acc
     obj.pos += obj.vel
     obj.acc *= 0
-    obj.vel *= friction
+    if obj.vel.length() > 0:
+        obj.vel = min(obj.vel, obj.vel.normalize() * 16,
+                      key=pygame.math.Vector2.magnitude)
+    #obj.vel *= friction
 
 
 def update_bounce_off_screen(dt, obj):
