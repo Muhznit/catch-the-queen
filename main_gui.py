@@ -137,8 +137,11 @@ def calc_separation_vectors(boids):
         yield heading / len(boids)
 
 
-def render_ball_spawner(surface, color, instance):
-    pygame.draw.circle(surface, color, (instance.x, instance.y), instance.radius)
+def render_ball_spawner(surface, color, t, instance):
+    radius = instance.radius * t
+
+    pygame.draw.circle(surface, color, (instance.pos.x, instance.pos.y),
+                       radius, 1)
 
 
 def render_crosshair(surface, color, center, radius):
@@ -158,10 +161,12 @@ def render_crosshair(surface, color, center, radius):
 class StartState(EngineState):
     def __init__(self):
         window_center = pygame.math.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
-        self.home_zone = BallSpawner(window_center.copy(), 64)
+        self.home_zone = BallSpawner(window_center.copy(), WINDOW_HEIGHT / 2)
         self.cursor = pygame.math.Vector2()
         self.balls = list()
         ball_count = 2
+        self.spawn_frequency = 10
+        self.spawner_countdown = self.spawn_frequency
         for _ in range(ball_count):
             ball = Ball(self.home_zone.pos.copy())
             ball.pos.x = ball.pos.x + math.cos(_ / ball_count * 2 * math.pi) * 64
@@ -176,9 +181,6 @@ class StartState(EngineState):
 
     def add_ball(self):
         ball = Ball(self.home_zone.pos.copy())
-        idx = len(self.balls)
-        ball.pos.x = ball.pos.x + math.cos((idx % 6) / 6 * 2 * math.pi) * 64
-        ball.pos.y = ball.pos.y + math.sin((idx % 6) / 6 * 2 * math.pi) * 64
         self.balls.append(ball)
 
     def update(self, dt):
@@ -186,13 +188,16 @@ class StartState(EngineState):
         mouse_pos = pygame.mouse.get_pos()
 
         self.cursor.update(mouse_pos)
+        self.spawner_countdown -= dt
+        if self.spawner_countdown <= 0:
+            self.add_ball()
+            self.home_zone.pos.update(mouse_pos)
+            self.spawner_countdown = self.spawn_frequency
 
         for ball in self.balls:
             update_basic_physics(dt, ball)
             update_bounce_off_screen(dt, ball)
             #update_wrap_around_screen(dt, ball)
-
-        #m1, m2, m3 = pygame.mouse.get_just_pressed()
 
         cohesions = tuple(calc_cohesion_vectors(self.balls))
         separations = tuple(calc_separation_vectors(self.balls))
@@ -208,15 +213,18 @@ class StartState(EngineState):
     def render(self, surface):
         surface.fill(pygame.Color("#000000"))
 
-        #render_ball_spawner(surface, "#FF0000", self.home_zone)
+        t = max(0, self.spawner_countdown / self.spawn_frequency)
+        color = pygame.Color.from_hsva(0, 0, (1 - t) ** 2 * 100, 100)
+        render_ball_spawner(surface, color, t, self.home_zone)
 
         radius = 8.0
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
 
         for i, ball in enumerate(self.balls):
-            color = pygame.Color.from_hsva(i / len(self.balls) * 360, 100, 100,
-                                           100)
+            mod_idx = i % 6
+            color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
             pygame.draw.circle(surface, color, ball.pos, radius)
+
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
             "starting state", False,
@@ -251,7 +259,6 @@ class SplashState(EngineState):
     def update(self, dt):
         keys = pygame.key.get_pressed()
         x, y = get_user_input_tuple()
-        print(x, y)
 
     def render(self, surface):
         # TODO: DRY this up
