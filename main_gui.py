@@ -49,12 +49,12 @@ class EngineState:
 # the second code snippet at https://www.pygame.org/wiki/QuadTree
 
 @dataclasses.dataclass(slots=True)
-class BallSpawner:
+class BoidSpawner:
     pos: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
     radius: float = 64
 
 @dataclasses.dataclass(slots=True)
-class Ball:
+class Boid:
     pos: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
     vel: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
     acc: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
@@ -138,7 +138,7 @@ def calc_separation_vectors(boids):
         yield heading / len(boids)
 
 
-def render_ball_spawner(surface, color, t, instance):
+def render_boid_spawner(surface, color, t, instance):
     radius = instance.radius * t
 
     pygame.draw.circle(surface, color, (instance.pos.x, instance.pos.y),
@@ -173,27 +173,27 @@ def render_boid(surface, color, boid):
 class StartState(EngineState):
     def __init__(self):
         window_center = pygame.math.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
-        self.home_zone = BallSpawner(window_center.copy(), WINDOW_HEIGHT / 2)
+        self.home_zone = BoidSpawner(window_center.copy(), WINDOW_HEIGHT / 2)
         self.cursor = pygame.math.Vector2()
-        self.balls = list()
-        ball_count = 2
+        self.boids = list()
+        boid_count = 2
         self.spawn_frequency = 10
         self.spawner_countdown = self.spawn_frequency
-        for _ in range(ball_count):
-            ball = Ball(self.home_zone.pos.copy())
-            ball.pos.x = ball.pos.x + math.cos(_ / ball_count * 2 * math.pi) * 64
-            ball.pos.y = ball.pos.y + math.sin(_ / ball_count * 2 * math.pi) * 64
-            self.balls.append(ball)
+        for _ in range(boid_count):
+            boid = Boid(self.home_zone.pos.copy())
+            boid.pos.x = boid.pos.x + math.cos(_ / boid_count * 2 * math.pi) * 64
+            boid.pos.y = boid.pos.y + math.sin(_ / boid_count * 2 * math.pi) * 64
+            self.boids.append(boid)
 
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             return
         if event.type == pygame.MOUSEBUTTONDOWN:
-            self.add_ball()
+            self.add_boid()
 
-    def add_ball(self):
-        ball = Ball(self.home_zone.pos.copy())
-        self.balls.append(ball)
+    def add_boid(self):
+        boid = Boid(self.home_zone.pos.copy())
+        self.boids.append(boid)
 
     def update(self, dt):
         x, y = get_user_input_tuple()
@@ -202,40 +202,40 @@ class StartState(EngineState):
         self.cursor.update(mouse_pos)
         self.spawner_countdown -= dt
         if self.spawner_countdown <= 0:
-            self.add_ball()
+            self.add_boid()
             self.home_zone.pos.update(mouse_pos)
             self.spawner_countdown = self.spawn_frequency
 
-        for ball in self.balls:
-            update_basic_physics(dt, ball)
-            update_bounce_off_screen(dt, ball)
-            #update_wrap_around_screen(dt, ball)
+        for boid in self.boids:
+            update_basic_physics(dt, boid)
+            update_bounce_off_screen(dt, boid)
+            #update_wrap_around_screen(dt, boid)
 
-        cohesions = tuple(calc_cohesion_vectors(self.balls))
-        separations = tuple(calc_separation_vectors(self.balls))
-        alignments = tuple(calc_alignment_vectors(self.balls))
-        for i, ball in enumerate(self.balls):
-            ball.acc += cohesions[i] + separations[i] + alignments[i]
-            ball.acc -= ball.vel
-            vec2_to_mouse = pygame.mouse.get_pos() - ball.pos
-            ball.acc += vec2_to_mouse
-            if ball.acc.length() > 1:
-                ball.acc.scale_to_length(1)
+        cohesions = tuple(calc_cohesion_vectors(self.boids))
+        separations = tuple(calc_separation_vectors(self.boids))
+        alignments = tuple(calc_alignment_vectors(self.boids))
+        for i, boid in enumerate(self.boids):
+            boid.acc += cohesions[i] + separations[i] + alignments[i]
+            boid.acc -= boid.vel
+            vec2_to_mouse = pygame.mouse.get_pos() - boid.pos
+            boid.acc += vec2_to_mouse
+            if boid.acc.length() > 1:
+                boid.acc.scale_to_length(1)
 
     def render(self, surface):
         surface.fill(pygame.Color("#000000"))
 
         t = max(0, self.spawner_countdown / self.spawn_frequency)
         color = pygame.Color.from_hsva(0, 0, (1 - t) ** 2 * 100, 100)
-        render_ball_spawner(surface, color, t, self.home_zone)
+        render_boid_spawner(surface, color, t, self.home_zone)
 
         radius = 8.0
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
 
-        for i, ball in enumerate(self.balls):
+        for i, boid in enumerate(self.boids):
             mod_idx = i % 6
             color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
-            render_boid(surface, color, ball)
+            render_boid(surface, color, boid)
 
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
