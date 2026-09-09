@@ -5,7 +5,7 @@ import math
 import pygame
 import pygame_gui
 
-EXT_CLI_EVENT = pygame.event.custom_type()
+BOID_CAUGHT_EVENT = pygame.event.custom_type()
 CLI_EVENT = pygame.event.custom_type()
 
 
@@ -179,6 +179,7 @@ class StartState(EngineState):
         boid_count = 2
         self.spawn_frequency = 10
         self.spawner_countdown = self.spawn_frequency
+        self.score = 0
         for _ in range(boid_count):
             boid = Boid(self.home_zone.pos.copy())
             boid.pos.x = boid.pos.x + math.cos(_ / boid_count * 2 * math.pi) * 64
@@ -190,6 +191,8 @@ class StartState(EngineState):
             return
         if event.type == pygame.MOUSEBUTTONDOWN:
             self.add_boid()
+        if event.type == BOID_CAUGHT_EVENT:
+            self.score += 1
 
     def add_boid(self):
         boid = Boid(self.home_zone.pos.copy())
@@ -210,6 +213,8 @@ class StartState(EngineState):
             update_basic_physics(dt, boid)
             update_bounce_off_screen(dt, boid)
             #update_wrap_around_screen(dt, boid)
+            if boid.pos.distance_to(mouse_pos) < 8:
+                pygame.event.post(pygame.event.Event(BOID_CAUGHT_EVENT))
 
         cohesions = tuple(calc_cohesion_vectors(self.boids))
         separations = tuple(calc_separation_vectors(self.boids))
@@ -218,7 +223,8 @@ class StartState(EngineState):
             boid.acc += cohesions[i] + separations[i] + alignments[i]
             boid.acc -= boid.vel
             vec2_to_mouse = pygame.mouse.get_pos() - boid.pos
-            boid.acc += vec2_to_mouse
+            if vec2_to_mouse.length() > WINDOW_HEIGHT / 2:
+                boid.acc -= vec2_to_mouse
             if boid.acc.length() > 1:
                 boid.acc.scale_to_length(1)
 
@@ -239,7 +245,7 @@ class StartState(EngineState):
 
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
-            "starting state", False,
+            f"starting state. {self.score=}", False,
             (255, 255, 255),
             (255,0,0)
         )
