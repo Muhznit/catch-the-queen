@@ -126,15 +126,19 @@ def calc_alignment_vectors(boids):
 
 
 def calc_separation_vectors(boids):
-    min_distance = 64
+    min_distance = 32
     for boid in boids:
         heading = pygame.math.Vector2(0, 0)
         for other_boid in boids:
-            distance = boid.pos.distance_to(other_boid.pos)
 
             pos_diff = boid.pos - other_boid.pos
             if 0 < pos_diff.length() < min_distance:
-                heading += pos_diff * (min_distance - distance) * min_distance
+                direction_away = pos_diff.normalize()
+                # TODO: direction_away and pos_diff are interchangableish.
+                # The former produces a gaurantee that collisions are avoided
+                # like actual boids, but pos_diff yields constantly-moving
+                # "swarms".
+                heading += pos_diff * (min_distance - pos_diff.length()) * min_distance
         yield heading / len(boids)
 
 
@@ -160,7 +164,7 @@ def render_crosshair(surface, color, center, radius):
 def render_boid(surface, color, boid):
     heading = boid.vel
     if heading.length():
-        heading = heading.normalize() * 8
+        heading = heading.normalize() * 4
     tip = boid.pos + heading
     rt_tip = boid.pos + heading.rotate(120)
     lf_tip = boid.pos + heading.rotate(-120)
@@ -209,13 +213,6 @@ class StartState(EngineState):
             self.home_zone.pos.update(mouse_pos)
             self.spawner_countdown = self.spawn_frequency
 
-        for boid in self.boids:
-            update_basic_physics(dt, boid)
-            update_bounce_off_screen(dt, boid)
-            #update_wrap_around_screen(dt, boid)
-            if boid.pos.distance_to(mouse_pos) < 8:
-                pygame.event.post(pygame.event.Event(BOID_CAUGHT_EVENT))
-
         cohesions = tuple(calc_cohesion_vectors(self.boids))
         separations = tuple(calc_separation_vectors(self.boids))
         alignments = tuple(calc_alignment_vectors(self.boids))
@@ -229,10 +226,16 @@ class StartState(EngineState):
                 case 1:
                     boid.acc # Kind of a no-op
                 case 2:
-                    if vec2_to_mouse.length() > WINDOW_HEIGHT / 2:
-                        boid.acc -= vec2_to_mouse
+                    boid.acc -= vec2_to_mouse
             if boid.acc.length() > 1:
                 boid.acc.scale_to_length(1)
+
+        for boid in self.boids:
+            update_basic_physics(dt, boid)
+            update_bounce_off_screen(dt, boid)
+            #update_wrap_around_screen(dt, boid)
+            if boid.pos.distance_to(mouse_pos) < 8:
+                pygame.event.post(pygame.event.Event(BOID_CAUGHT_EVENT))
 
     def render(self, surface):
         surface.fill(pygame.Color("#000000"))
