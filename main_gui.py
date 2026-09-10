@@ -223,8 +223,14 @@ class StartState(EngineState):
             boid.acc += cohesions[i] + separations[i] + alignments[i]
             boid.acc -= boid.vel
             vec2_to_mouse = pygame.mouse.get_pos() - boid.pos
-            if vec2_to_mouse.length() > WINDOW_HEIGHT / 2:
-                boid.acc -= vec2_to_mouse
+            match i % 3:
+                case 0:
+                    boid.acc += vec2_to_mouse
+                case 1:
+                    boid.acc # Kind of a no-op
+                case 2:
+                    if vec2_to_mouse.length() > WINDOW_HEIGHT / 2:
+                        boid.acc -= vec2_to_mouse
             if boid.acc.length() > 1:
                 boid.acc.scale_to_length(1)
 
