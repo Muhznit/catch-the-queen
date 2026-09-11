@@ -206,8 +206,6 @@ class BoidCaughtSprite(pygame.sprite.Sprite):
     def update(self, dt):
         self.lifespan += dt
         self.rect.y -= 1
-        if self.lifespan >= 180:
-            kill()
 
     @property
     def image(self):
@@ -311,9 +309,12 @@ class StartState(EngineState):
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
         #render_crosshair(surface, "#FFFFFF", self.evil_cursor, radius)
 
+        chaser_color = "#808080"
         for i, boid in enumerate(self.boids):
             mod_idx = i % 6
             color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
+            if i != 0:
+                color = chaser_color
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
