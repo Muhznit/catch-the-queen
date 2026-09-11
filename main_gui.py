@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import dataclasses
+import io
 import math
 
 import pygame
@@ -8,6 +9,9 @@ import pygame_gui
 BOID_CAUGHT_EVENT = pygame.event.custom_type()
 CLI_EVENT = pygame.event.custom_type()
 
+WINDOW_WIDTH = 960
+WINDOW_HEIGHT = 540
+FLASH_FREQUENCY_HZ = 10
 
 def get_user_input_tuple():
     # Default keybinds, esdf. Don't knock it till you try it.
@@ -23,8 +27,17 @@ def get_user_input_tuple():
     return x, y
 
 
-WINDOW_WIDTH = 960
-WINDOW_HEIGHT = 540
+def generate_butterfly():
+    color = "#00FFFF"
+    surface = pygame.Surface((32, 32))
+    with open("assets/butterfly.svg", "r") as f:
+        svg_data = f.read()
+        scale_factor = .5
+        svg_data = svg_data.replace('width="32"', 'width="8"')
+        svg_data = svg_data.replace('height="32"', 'height="8"')
+        svg_data = svg_data.replace('#ff0000', '#00ff00')
+        svg_data_bytes = io.BytesIO(svg_data.encode("utf-8"))
+        return pygame.image.load(svg_data_bytes, "svg")
 
 
 # TODO: Follow a strict template for loading assets
@@ -173,12 +186,42 @@ def render_boid(surface, color, boid):
     pygame.draw.line(surface, color, tip, lf_tip)
     pygame.draw.line(surface, color, boid.pos, tail)
 
+
+class BoidCaughtSprite(pygame.sprite.Sprite):
+    def __init__(self, pos):
+        pygame.sprite.Sprite.__init__(self)
+        font = pygame.font.Font("assets/ICOIN.FON", 32)
+        colors = ["white", (255, 0, 0)]
+        self.surfaces = []
+        for i in range(2):
+            font_surf = font.render(
+                "CATCH!", False,
+                colors[i]
+            )
+            self.surfaces.append(font_surf)
+        self.rect = self.surfaces[0].get_rect(center=(pos.x, pos.y))
+        self.lifespan = 0
+
+    def update(self, dt):
+        self.lifespan += dt
+        self.rect.y -= 1
+        if self.lifespan >= 180:
+            kill()
+
+    @property
+    def image(self):
+        idx = int(self.lifespan * FLASH_FREQUENCY_HZ) % 2
+        return self.surfaces[idx]
+
+
+
 # Application States: States that the whole app can be in.
 class StartState(EngineState):
     def __init__(self):
         window_center = pygame.math.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
         self.home_zone = BoidSpawner(window_center.copy(), WINDOW_HEIGHT / 2)
         self.cursor = pygame.math.Vector2()
+        self.evil_cursor = pygame.math.Vector2()
         self.boids = list()
         boid_count = 2
         self.spawn_frequency = 10
@@ -190,6 +233,8 @@ class StartState(EngineState):
             boid.pos.y = boid.pos.y + math.sin(_ / boid_count * 2 * math.pi) * 64
             self.boids.append(boid)
 
+        self.flasher_sprites = pygame.sprite.Group()
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             return
@@ -197,6 +242,8 @@ class StartState(EngineState):
             self.add_boid()
         if event.type == BOID_CAUGHT_EVENT:
             self.score += 1
+            sprite = BoidCaughtSprite(event.pos)
+            sprite.add(self.flasher_sprites)
 
     def add_boid(self):
         boid = Boid(self.home_zone.pos.copy())
@@ -204,9 +251,14 @@ class StartState(EngineState):
 
     def update(self, dt):
         x, y = get_user_input_tuple()
-        mouse_pos = pygame.mouse.get_pos()
-
+        mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
         self.cursor.update(mouse_pos)
+
+        self.evil_cursor.update(
+            (self.cursor.x + WINDOW_WIDTH / 2) % WINDOW_WIDTH,
+            (self.cursor.y + WINDOW_HEIGHT /2) % WINDOW_HEIGHT
+        )
+
         self.spawner_countdown -= dt
         if self.spawner_countdown <= 0:
             self.add_boid()
@@ -219,23 +271,27 @@ class StartState(EngineState):
         for i, boid in enumerate(self.boids):
             boid.acc += cohesions[i] + separations[i] + alignments[i]
             boid.acc -= boid.vel
-            vec2_to_mouse = pygame.mouse.get_pos() - boid.pos
-            match i % 3:
-                case 0:
-                    boid.acc += vec2_to_mouse
-                case 1:
-                    boid.acc # Kind of a no-op
-                case 2:
-                    boid.acc -= vec2_to_mouse
+            match i == 0:
+                case False:
+                    boid.acc += self.cursor - boid.pos
+                case True:
+                    boid.acc += self.evil_cursor - boid.pos
             if boid.acc.length() > 1:
                 boid.acc.scale_to_length(1)
 
-        for boid in self.boids:
+        for i, boid in enumerate(self.boids):
             update_basic_physics(dt, boid)
             update_bounce_off_screen(dt, boid)
             #update_wrap_around_screen(dt, boid)
-            if boid.pos.distance_to(mouse_pos) < 8:
-                pygame.event.post(pygame.event.Event(BOID_CAUGHT_EVENT))
+            if i == 0 and boid.pos.distance_to(mouse_pos) < 8:
+                evt = pygame.event.Event(BOID_CAUGHT_EVENT, {"pos": mouse_pos})
+                pygame.event.post(evt)
+
+        self.flasher_sprites.update(dt)
+        for flasher in self.flasher_sprites:
+            if flasher.lifespan > 1:
+                flasher.kill()
+                del flasher
 
     def render(self, surface):
         surface.fill(pygame.Color("#000000"))
@@ -246,12 +302,14 @@ class StartState(EngineState):
 
         radius = 8.0
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
+        #render_crosshair(surface, "#FFFFFF", self.evil_cursor, radius)
 
         for i, boid in enumerate(self.boids):
             mod_idx = i % 6
             color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
             render_boid(surface, color, boid)
 
+        self.flasher_sprites.draw(surface)
         font = pygame.font.SysFont("Courier New", 32)
         font_surf = font.render(
             f"starting state. {self.score=}", False,
@@ -276,6 +334,8 @@ class StopState(EngineState):
 class SplashState(EngineState):
     def __init__(self):
         self.fsm = None
+        self.butterfly_img = generate_butterfly()
+        self.zoo = pygame.sprite.Group()
 
     def handle_event(self, event):
         if event.type == pygame.QUIT:
@@ -297,6 +357,7 @@ class SplashState(EngineState):
             (255,0,0)
         )
         surface.blit(font_surf, font_surf.get_rect())
+        #surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
 
 
 class StateMachine:
