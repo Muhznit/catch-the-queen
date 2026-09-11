@@ -2,6 +2,7 @@
 import dataclasses
 import io
 import math
+import statistics
 
 import pygame
 import pygame_gui
@@ -224,7 +225,7 @@ class StartState(EngineState):
         self.evil_cursor = pygame.math.Vector2()
         self.boids = list()
         boid_count = 2
-        self.spawn_frequency = 10
+        self.spawn_frequency = 2
         self.spawner_countdown = self.spawn_frequency
         self.score = 0
         for _ in range(boid_count):
@@ -262,7 +263,13 @@ class StartState(EngineState):
         self.spawner_countdown -= dt
         if self.spawner_countdown <= 0:
             self.add_boid()
-            self.home_zone.pos.update(mouse_pos)
+            n = pygame.math.Vector2(mouse_pos.x, 0)
+            e = pygame.math.Vector2(WINDOW_WIDTH, mouse_pos.y)
+            s = pygame.math.Vector2(mouse_pos.x, WINDOW_HEIGHT)
+            w = pygame.math.Vector2(0, mouse_pos.y)
+            nearest = min([n, e, s, w], key=lambda _: (mouse_pos - _).length())
+
+            self.home_zone.pos.update(nearest)
             self.spawner_countdown = self.spawn_frequency
 
         cohesions = tuple(calc_cohesion_vectors(self.boids))
@@ -310,7 +317,7 @@ class StartState(EngineState):
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
-        font = pygame.font.SysFont("Courier New", 32)
+        font = pygame.font.Font("assets/ICOIN.FON", 32)
         font_surf = font.render(
             f"starting state. {self.score=}", False,
             (255, 255, 255),
