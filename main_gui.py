@@ -12,7 +12,27 @@ CLI_EVENT = pygame.event.custom_type()
 
 WINDOW_WIDTH = 960
 WINDOW_HEIGHT = 540
+
 FLASH_FREQUENCY_HZ = 10
+
+class LazyLoadedFont:
+    def __init__(self, font_callable, *args, **kwargs):
+        self._font_callable = font_callable
+        expected_callables = (pygame.font.Font, pygame.font.SysFont)
+        if not isinstance(self._font_callable, pygame.font.Font):
+            if not callable(self._font_callable):
+                exc_msg = f"{font_callable} is not callable"
+                raise Exception(exc_msg)
+        self._args = args
+        self._kwargs = kwargs
+
+    def __get__(self, obj, objtype=None):
+        self._font = self._font_callable(*self._args, **self._kwargs)
+        return self._font
+
+class Fonts:
+    FONT_COURIER_NEW = LazyLoadedFont(pygame.font.SysFont, "Courier New", 32)
+    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/ICOIN.FON", 32)
 
 def get_user_input_tuple():
     # Default keybinds, esdf. Don't knock it till you try it.
@@ -191,14 +211,11 @@ def render_boid(surface, color, boid):
 class BoidCaughtSprite(pygame.sprite.Sprite):
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
-        font = pygame.font.Font("assets/ICOIN.FON", 32)
+        font = Fonts.FONT_ICOIN
         colors = ["white", (255, 0, 0)]
         self.surfaces = []
         for i in range(2):
-            font_surf = font.render(
-                "CATCH!", False,
-                colors[i]
-            )
+            font_surf = font.render("CATCH!", False, colors[i])
             self.surfaces.append(font_surf)
         self.rect = self.surfaces[0].get_rect(center=(pos.x, pos.y))
         self.lifespan = 0
@@ -318,24 +335,17 @@ class StartState(EngineState):
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
-        font = pygame.font.Font("assets/ICOIN.FON", 32)
-        font_surf = font.render(
-            f"starting state. {self.score=}", False,
-            (255, 255, 255),
-            (255,0,0)
-        )
+        font = Fonts.FONT_ICOIN
+        text = f"starting state. {self.score=}"
+        font_surf = font.render(text, False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
 
 
 class StopState(EngineState):
     def render(self, surface):
-        font = pygame.font.SysFont("Courier New", 32)
+        font = Fonts.FONT_COURIER_NEW
         surface.fill(pygame.Color("#000000"))
-        font_surf = font.render(
-            "stop state", False,
-            (255, 255, 255),
-            (255,0,0)
-        )
+        font_surf = font.render("stop state", False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
 
 
@@ -357,13 +367,9 @@ class SplashState(EngineState):
 
     def render(self, surface):
         # TODO: DRY this up
-        font = pygame.font.SysFont("Courier New", 32)
+        font = Fonts.FONT_COURIER_NEW
         surface.fill(pygame.Color("#000000"))
-        font_surf = font.render(
-            "splash state", False,
-            (255, 255, 255),
-            (255,0,0)
-        )
+        font_surf = font.render("splash state", False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
         #surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
 
