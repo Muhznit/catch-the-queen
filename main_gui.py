@@ -3,17 +3,18 @@ import dataclasses
 import io
 import math
 import statistics
+import time
 
 import pygame
 import pygame_gui
 
-BOID_CAUGHT_EVENT = pygame.event.custom_type()
-CLI_EVENT = pygame.event.custom_type()
+QUEEN_COLLIDE_EVENT = pygame.event.custom_type()
+DRONE_COLLIDE_EVENT = pygame.event.custom_type()
 
-WINDOW_WIDTH = 960
-WINDOW_HEIGHT = 540
+WINDOW_WIDTH = 640
+WINDOW_HEIGHT = 480
 
-FLASH_FREQUENCY_HZ = 10
+FLASH_FREQUENCY_HZ = 3
 
 class LazyLoadedFont:
     def __init__(self, font_callable, *args, **kwargs):
@@ -32,7 +33,7 @@ class LazyLoadedFont:
 
 class Fonts:
     FONT_COURIER_NEW = LazyLoadedFont(pygame.font.SysFont, "Courier New", 32)
-    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/ICOIN.FON", 32)
+    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/ICOIN.FON", 36)
 
 def get_user_input_tuple():
     # Default keybinds, esdf. Don't knock it till you try it.
@@ -160,7 +161,7 @@ def calc_alignment_vectors(boids):
 
 
 def calc_separation_vectors(boids):
-    min_distance = 32
+    min_distance = 64
     for boid in boids:
         heading = pygame.math.Vector2(0, 0)
         for other_boid in boids:
@@ -168,11 +169,7 @@ def calc_separation_vectors(boids):
             pos_diff = boid.pos - other_boid.pos
             if 0 < pos_diff.length() < min_distance:
                 direction_away = pos_diff.normalize()
-                # TODO: direction_away and pos_diff are interchangableish.
-                # The former produces a gaurantee that collisions are avoided
-                # like actual boids, but pos_diff yields constantly-moving
-                # "swarms".
-                heading += pos_diff * (min_distance - pos_diff.length()) * min_distance
+                heading += direction_away * (min_distance - pos_diff.length()) * min_distance
         yield heading / len(boids)
 
 
@@ -208,14 +205,14 @@ def render_boid(surface, color, boid):
     pygame.draw.line(surface, color, boid.pos, tail)
 
 
-class BoidCaughtSprite(pygame.sprite.Sprite):
-    def __init__(self, pos):
+class Flasher(pygame.sprite.Sprite):
+    def __init__(self, text, color, pos):
         pygame.sprite.Sprite.__init__(self)
         font = Fonts.FONT_ICOIN
-        colors = ["white", (255, 0, 0)]
+        colors = [color, "#FFFFFF"]
         self.surfaces = []
         for i in range(2):
-            font_surf = font.render("CATCH!", False, colors[i])
+            font_surf = font.render(text, False, colors[i])
             self.surfaces.append(font_surf)
         self.rect = self.surfaces[0].get_rect(center=(pos.x, pos.y))
         self.lifespan = 0
@@ -250,15 +247,25 @@ class StartState(EngineState):
             self.boids.append(boid)
 
         self.flasher_sprites = pygame.sprite.Group()
+        self.duration = 0
+        self.last_hit = 0
+        self.catch_times = []
+        pygame.mouse.set_visible(False)
 
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             return
         if event.type == pygame.MOUSEBUTTONDOWN:
             self.add_boid()
-        if event.type == BOID_CAUGHT_EVENT:
+        if event.type == QUEEN_COLLIDE_EVENT:
             self.score += 1
-            sprite = BoidCaughtSprite(event.pos)
+            self.catch_times.append(self.duration)
+            sprite = Flasher("SCORE +1", "green", event.pos)
+            sprite.add(self.flasher_sprites)
+            self.add_boid()
+
+        if event.type == DRONE_COLLIDE_EVENT:
+            sprite = Flasher("SCORE -1", "red", event.pos)
             sprite.add(self.flasher_sprites)
 
     def add_boid(self):
@@ -266,6 +273,7 @@ class StartState(EngineState):
         self.boids.append(boid)
 
     def update(self, dt):
+        self.duration += dt
         x, y = get_user_input_tuple()
         mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
         self.cursor.update(mouse_pos)
@@ -277,7 +285,7 @@ class StartState(EngineState):
 
         self.spawner_countdown -= dt
         if self.spawner_countdown <= 0:
-            self.add_boid()
+            #self.add_boid()
             n = pygame.math.Vector2(mouse_pos.x, 0)
             e = pygame.math.Vector2(WINDOW_WIDTH, mouse_pos.y)
             s = pygame.math.Vector2(mouse_pos.x, WINDOW_HEIGHT)
@@ -305,9 +313,13 @@ class StartState(EngineState):
             update_basic_physics(dt, boid)
             update_bounce_off_screen(dt, boid)
             #update_wrap_around_screen(dt, boid)
-            if i == 0 and boid.pos.distance_to(mouse_pos) < 8:
-                evt = pygame.event.Event(BOID_CAUGHT_EVENT, {"pos": mouse_pos})
-                pygame.event.post(evt)
+            if boid.pos.distance_to(mouse_pos) < 8:
+                if i == 0:
+                    evt = pygame.event.Event(QUEEN_COLLIDE_EVENT, {"pos": mouse_pos})
+                    pygame.event.post(evt)
+                else:
+                    evt = pygame.event.Event(DRONE_COLLIDE_EVENT, {"pos": mouse_pos})
+                    pygame.event.post(evt)
 
         self.flasher_sprites.update(dt)
         for flasher in self.flasher_sprites:
@@ -318,9 +330,11 @@ class StartState(EngineState):
     def render(self, surface):
         surface.fill(pygame.Color("#000000"))
 
-        t = max(0, self.spawner_countdown / self.spawn_frequency)
-        color = pygame.Color.from_hsva(0, 0, (1 - t) ** 2 * 100, 100)
-        render_boid_spawner(surface, color, t, self.home_zone)
+        if False:
+            # Disabled because rendering the spawner is just distracting.
+            t = max(0, self.spawner_countdown / self.spawn_frequency)
+            color = pygame.Color.from_hsva(0, 0, (1 - t) ** 2 * 100, 100)
+            render_boid_spawner(surface, color, t, self.home_zone)
 
         radius = 8.0
         render_crosshair(surface, "#FFFFFF", self.cursor, radius)
@@ -336,7 +350,7 @@ class StartState(EngineState):
 
         self.flasher_sprites.draw(surface)
         font = Fonts.FONT_ICOIN
-        text = f"starting state. {self.score=}"
+        text = f"Catch the gold. Avoid the gray.\nScore: {self.score=}"
         font_surf = font.render(text, False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
 
