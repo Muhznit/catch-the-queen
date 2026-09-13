@@ -12,7 +12,7 @@ install: venv
 	$(PYTHON_EXE) -m pip install -r requirements.txt
 
 run: venv ## Run the actual program
-	@$(PYTHON_EXE) main_gui.py
+	@$(PYTHON_EXE) main.py
 
 clean-pyc: 
 	@find . -type d -name '__pycache__' -exec rm -rf {} +

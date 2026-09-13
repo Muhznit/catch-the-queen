@@ -1,41 +1,43 @@
 #!/usr/bin/env python3
-import argparse
+import asyncio
 import dataclasses
-import io
 import math
-import statistics
 import time
 
 import pygame
-import pygame_gui
+
+numpass, numfail = pygame.init()
+WINDOW_WIDTH = 640
+WINDOW_HEIGHT = 480
+MAIN_CLOCK = pygame.time.Clock()
+MAIN_SURFACE = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
 QUEEN_COLLIDE_EVENT = pygame.event.custom_type()
 DRONE_COLLIDE_EVENT = pygame.event.custom_type()
 TIME_UP_EVENT = pygame.event.custom_type()
 
-WINDOW_WIDTH = 640
-WINDOW_HEIGHT = 480
 
 FLASH_FREQUENCY_HZ = 3
 
-class LazyLoadedFont:
-    def __init__(self, font_callable, *args, **kwargs):
-        self._font_callable = font_callable
-        expected_callables = (pygame.font.Font, pygame.font.SysFont)
-        if not isinstance(self._font_callable, pygame.font.Font):
-            if not callable(self._font_callable):
-                exc_msg = f"{font_callable} is not callable"
-                raise Exception(exc_msg)
-        self._args = args
-        self._kwargs = kwargs
+if False:
+    class LazyLoadedFont:
+        def __init__(self, font_callable, *args, **kwargs):
+            self._font_callable = font_callable
+            expected_callables = (pygame.font.Font, pygame.font.SysFont)
+            if not isinstance(self._font_callable, pygame.font.Font):
+                if not callable(self._font_callable):
+                    exc_msg = f"{font_callable} is not callable"
+                    raise Exception(exc_msg)
+            self._args = args
+            self._kwargs = kwargs
 
-    def __get__(self, obj, objtype=None):
-        self._font = self._font_callable(*self._args, **self._kwargs)
-        return self._font
+        def __get__(self, obj, objtype=None):
+            self._font = self._font_callable(*self._args, **self._kwargs)
+            return self._font
 
-class Fonts:
-    FONT_COURIER_NEW = LazyLoadedFont(pygame.font.SysFont, "Courier New", 32)
-    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/PressStart2P.ttf", 16)
+    class Fonts:
+        FONT_COURIER_NEW = LazyLoadedFont(pygame.font.SysFont, "Courier New", 32)
+        FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/PressStart2P.ttf", 16)
 
 def get_user_input_tuple():
     # Default keybinds, esdf. Don't knock it till you try it.
@@ -53,6 +55,7 @@ def get_user_input_tuple():
 
 def generate_butterfly():
     color = "#00FFFF"
+    return pygame.image.load("assets/butterfly.svg", "svg")
     with open("assets/butterfly.svg", "r") as f:
         svg_data = f.read()
         scale_factor = .5
@@ -218,7 +221,7 @@ class Flasher(pygame.sprite.Sprite):
     def __init__(self, text, color, pos):
         pygame.sprite.Sprite.__init__(self)
         # TODO: Use interpolation to make color transitions.
-        font = Fonts.FONT_ICOIN
+        font = pygame.font.SysFont("Courier New", 32)
         colors = [color, "#FFFFFF"]
         self.surfaces = []
         for i in range(2):
@@ -381,7 +384,7 @@ class StartState(EngineState):
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
-        font = Fonts.FONT_ICOIN
+        font = pygame.font.SysFont("Courier New", 32)
         text = (
             f"Catch the gold. Avoid the gray.\n"
             f"Score: {self.score=}\n"
@@ -401,7 +404,7 @@ class StopState(EngineState):
             self.fsm.push_state(SplashState())
 
     def render(self, surface):
-        font = Fonts.FONT_COURIER_NEW
+        font = pygame.font.SysFont("Courier New", 32)
         surface.fill(pygame.Color("#000000"))
         text = "Final score:\n"
         text += "Catches: {catches}\n".format(**self.score_summary)
@@ -429,14 +432,15 @@ class SplashState(EngineState):
 
     def render(self, surface):
         # TODO: DRY this up
-        font = Fonts.FONT_COURIER_NEW
+        font = pygame.font.Font("assets/PressStart2P.ttf", 32)
         surface.fill(pygame.Color("#000000"))
         text = "Capture the Queen Boid\n"
         text += "by Muhznit\n\n"
         text += "Click to start"
         font_surf = font.render(text, False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
-        surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
+        if self.butterfly_img:
+            surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
 
 
 class StateMachine:
@@ -468,42 +472,43 @@ class StateMachine:
     def update(self, dt):
         if self._state:
             self._state.update(dt)
+            pass
 
     def render(self, surface):
         if self._state:
             self._state.render(surface)
-            pygame.display.update()
+            pass
 
 
 class Engine:
     def __init__(self):
         self._state_machine = StateMachine()
-        self._state_machine.push_state(SplashState())
+        self._state_machine.push_state(None)
 
     def run(self):
-        clock = pygame.time.Clock()
-        surface = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         for state in self._state_machine:
-            dt = clock.tick(60) / 1000.0
+            dt = MAIN_CLOCK.tick(60) / 1000.0
             if self._state_machine.event_loop():
                 break
             self._state_machine.update(dt)
-            self._state_machine.render(surface)
-        pygame.quit()
+            self._state_machine.render(MAIN_SURFACE)
+            pygame.display.update()
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Capture the Queen 1.0")
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="1.0"
-    )
-    args = parser.parse_args()
-    numpass, numfail = pygame.init()
+async def main():
     print(f"Initialized pygame modules: {numpass=} {numfail=}")
-    Engine().run()
+    state_machine = StateMachine()
+    state_machine.push_state(SplashState())
+    for state in state_machine:
+        #Engine().run()
+        dt = MAIN_CLOCK.tick(60) / 1000.0
+        if state_machine.event_loop():
+            break
+        state_machine.update(dt)
+        state_machine.render(MAIN_SURFACE)
+        pygame.draw.circle(MAIN_SURFACE, "#0000FF", (0, 0), 64)
+        pygame.display.update()
+        await asyncio.sleep(0)
+    pygame.quit()
 
 
-if __name__ == "__main__":
-    main()
+asyncio.run(main())
