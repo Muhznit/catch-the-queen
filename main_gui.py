@@ -10,6 +10,7 @@ import pygame_gui
 
 QUEEN_COLLIDE_EVENT = pygame.event.custom_type()
 DRONE_COLLIDE_EVENT = pygame.event.custom_type()
+TIME_UP_EVENT = pygame.event.custom_type()
 
 WINDOW_WIDTH = 640
 WINDOW_HEIGHT = 480
@@ -55,13 +56,14 @@ def generate_butterfly():
     with open("assets/butterfly.svg", "r") as f:
         svg_data = f.read()
         scale_factor = .5
-        svg_data = svg_data.replace('width="32"', 'width="8"')
-        svg_data = svg_data.replace('height="32"', 'height="8"')
+        svg_data = svg_data.replace('width="32"', 'width="16"')
+        svg_data = svg_data.replace('height="32"', 'height="16"')
         svg_data = svg_data.replace('#ff0000', '#00ff00')
         svg_data_bytes = io.BytesIO(svg_data.encode("utf-8"))
         return pygame.image.load(svg_data_bytes, "svg")
 
 
+BUTTERFLY_IMG = generate_butterfly()
 # TODO: Follow a strict template for loading assets
 # /gui (kinda necessary)
 # /bgm (music to listen to while loading)
@@ -93,6 +95,7 @@ class Boid:
     pos: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
     vel: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
     acc: pygame.math.Vector2 = dataclasses.field(default_factory=pygame.math.Vector2)
+    size: int = 8
 
 
 def update_basic_physics(dt, obj):
@@ -193,6 +196,11 @@ def render_crosshair(surface, color, center, radius):
     )
 
 def render_boid(surface, color, boid):
+    if False:
+        rect = BUTTERFLY_IMG.get_rect(center=boid.pos)
+        surface.blit(BUTTERFLY_IMG, rect)
+        return
+    pygame.draw.circle(surface, color, boid.pos, boid.size, 1)
     heading = boid.vel
     if heading.length():
         heading = heading.normalize() * 4
@@ -231,6 +239,7 @@ class Flasher(pygame.sprite.Sprite):
 # Application States: States that the whole app can be in.
 class StartState(EngineState):
     def __init__(self):
+        self.fsm = None
         window_center = pygame.math.Vector2(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)
         self.home_zone = BoidSpawner(window_center.copy(), WINDOW_HEIGHT / 2)
         self.cursor = pygame.math.Vector2()
@@ -248,8 +257,9 @@ class StartState(EngineState):
 
         self.flasher_sprites = pygame.sprite.Group()
         self.duration = 0
-        self.last_hit = 0
+        self.max_duration = 60
         self.catch_times = []
+        self.hits = 0
         pygame.mouse.set_visible(False)
 
     def handle_event(self, event):
@@ -257,6 +267,7 @@ class StartState(EngineState):
             return
         if event.type == pygame.MOUSEBUTTONDOWN:
             self.add_boid()
+
         if event.type == QUEEN_COLLIDE_EVENT:
             self.score += 1
             self.catch_times.append(self.duration)
@@ -268,12 +279,26 @@ class StartState(EngineState):
             sprite = Flasher("SCORE -1", "red", event.pos)
             sprite.add(self.flasher_sprites)
 
+        if event.type == TIME_UP_EVENT:
+            if False:
+                score_summary = {
+                    "catches": len(self.catch_times),
+                    "hits": self.hits
+                }
+                stop_state = StopState()
+                stop_state.score_summary = score_summary
+                stop_state.fsm = self.fsm
+                self.fsm.push_state(StopState())
+
     def add_boid(self):
         boid = Boid(self.home_zone.pos.copy())
         self.boids.append(boid)
 
     def update(self, dt):
         self.duration += dt
+        if self.duration >= self.max_duration and False:
+            evt = pygame.event.Event(TIME_UP_EVENT)
+            pygame.event.post(evt)
         x, y = get_user_input_tuple()
         mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
         self.cursor.update(mouse_pos)
@@ -313,7 +338,7 @@ class StartState(EngineState):
             update_basic_physics(dt, boid)
             update_bounce_off_screen(dt, boid)
             #update_wrap_around_screen(dt, boid)
-            if boid.pos.distance_to(mouse_pos) < 8:
+            if boid.pos.distance_to(mouse_pos) < boid.size:
                 if i == 0:
                     evt = pygame.event.Event(QUEEN_COLLIDE_EVENT, {"pos": mouse_pos})
                     pygame.event.post(evt)
@@ -342,23 +367,35 @@ class StartState(EngineState):
 
         chaser_color = "#808080"
         for i, boid in enumerate(self.boids):
-            mod_idx = i % 6
-            color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
+            #mod_idx = i % 6
+            #color = pygame.Color.from_hsva(mod_idx / 6 * 360, 100, 100, 100)
+            color = "gold"
             if i != 0:
                 color = chaser_color
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
         font = Fonts.FONT_ICOIN
-        text = f"Catch the gold. Avoid the gray.\nScore: {self.score=}"
+        text = (
+            f"Catch the gold. Avoid the gray.\n"
+            f"Score: {self.score=}\n"
+            f"Time: {self.max_duration - self.duration:.2f}"
+        )
         font_surf = font.render(text, False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
 
 
 class StopState(EngineState):
+    def __init__(self):
+        self.fsm = None
+        self.score_summary = None
+
     def render(self, surface):
         font = Fonts.FONT_COURIER_NEW
         surface.fill(pygame.Color("#000000"))
+        text = "Final score:\n"
+        text += "Catches: {catches}\n".format(**self.score_summary)
+        text += "Hits: {hits}\n".format(**self.score_summary)
         font_surf = font.render("stop state", False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
 
@@ -372,8 +409,10 @@ class SplashState(EngineState):
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             return
-        if event.type == pygame.KEYUP:
-            self.fsm.push_state(StartState())
+        if event.type == pygame.KEYUP or event.type == pygame.MOUSEBUTTONDOWN:
+            state = StartState()
+            state.fsm = self.fsm
+            self.fsm.push_state(state)
 
     def update(self, dt):
         keys = pygame.key.get_pressed()
@@ -385,7 +424,7 @@ class SplashState(EngineState):
         surface.fill(pygame.Color("#000000"))
         font_surf = font.render("splash state", False, "#FFFFFF")
         surface.blit(font_surf, font_surf.get_rect())
-        #surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
+        surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
 
 
 class StateMachine:
