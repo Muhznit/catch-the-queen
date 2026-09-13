@@ -34,7 +34,7 @@ class LazyLoadedFont:
 
 class Fonts:
     FONT_COURIER_NEW = LazyLoadedFont(pygame.font.SysFont, "Courier New", 32)
-    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/ICOIN.FON", 36)
+    FONT_ICOIN = LazyLoadedFont(pygame.font.Font, "assets/PressStart2P.ttf", 16)
 
 def get_user_input_tuple():
     # Default keybinds, esdf. Don't knock it till you try it.
