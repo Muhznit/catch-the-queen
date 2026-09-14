@@ -199,11 +199,13 @@ def render_crosshair(surface, color, center, radius):
         (center.x + radius, center.y)
     )
 
+
+def boid_to_sprite_image(boid, base_image):
+    angle = -(boid.vel.angle + 90)
+    rotated = pygame.transform.rotate(base_image, angle)
+    return rotated
+
 def render_boid(surface, color, boid):
-    if False:
-        rect = BUTTERFLY_IMG.get_rect(center=boid.pos)
-        surface.blit(BUTTERFLY_IMG, rect)
-        return
     pygame.draw.circle(surface, color, boid.pos, boid.radius, 1)
     heading = boid.vel
     if heading.length():
@@ -215,6 +217,15 @@ def render_boid(surface, color, boid):
     pygame.draw.line(surface, color, tip, rt_tip)
     pygame.draw.line(surface, color, tip, lf_tip)
     pygame.draw.line(surface, color, boid.pos, tail)
+
+    butterfly_surface = boid_to_sprite_image(boid, BUTTERFLY_IMG)
+    tint = pygame.Surface(butterfly_surface.get_size())
+    tint.fill(color)
+    butterfly_surface.blit(tint, special_flags=pygame.BLEND_RGB_MULT)
+    surface.blit(
+        butterfly_surface,
+        butterfly_surface.get_rect(center=boid.pos)
+    )
 
 
 class Flasher(pygame.sprite.Sprite):
@@ -238,7 +249,6 @@ class Flasher(pygame.sprite.Sprite):
     def image(self):
         idx = int(self.lifespan * FLASH_FREQUENCY_HZ) % 2
         return self.surfaces[idx]
-
 
 
 # Application States: States that the whole app can be in.
@@ -266,7 +276,7 @@ class StartState(EngineState):
         self.catch_times = []
         self.hits = 0
 
-        pygame.event.set_grab(True)
+        #pygame.event.set_grab(True)
         pygame.mouse.set_visible(False)
 
     def handle_event(self, event):
@@ -384,7 +394,7 @@ class StartState(EngineState):
             render_boid(surface, color, boid)
 
         self.flasher_sprites.draw(surface)
-        font = pygame.font.SysFont("Courier New", 32)
+        font = pygame.font.Font("assets/PressStart2P.ttf", 16)
         text = (
             f"Catch the gold. Avoid the gray.\n"
             f"Score: {self.score=}\n"
@@ -404,7 +414,7 @@ class StopState(EngineState):
             self.fsm.push_state(SplashState())
 
     def render(self, surface):
-        font = pygame.font.SysFont("Courier New", 32)
+        font = pygame.font.Font("assets/PressStart2P.ttf", 16)
         surface.fill(pygame.Color("#000000"))
         text = "Final score:\n"
         text += "Catches: {catches}\n".format(**self.score_summary)
@@ -418,7 +428,9 @@ class SplashState(EngineState):
     def __init__(self):
         self.fsm = None
         self.butterfly_img = generate_butterfly()
+        self.boid = Boid((WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2))
         self.zoo = pygame.sprite.Group()
+        self.duration = 0
 
     def handle_event(self, event):
         if  event.type == pygame.MOUSEBUTTONDOWN:
@@ -427,20 +439,24 @@ class SplashState(EngineState):
             self.fsm.push_state(state)
 
     def update(self, dt):
+
+        self.duration += dt
+        self.boid.vel.x = math.cos(self.duration * math.pi) * 64
+        self.boid.vel.y = math.sin(self.duration * math.pi) * 64
         keys = pygame.key.get_pressed()
         x, y = get_user_input_tuple()
 
     def render(self, surface):
         # TODO: DRY this up
-        font = pygame.font.Font("assets/PressStart2P.ttf", 32)
+        font = pygame.font.Font("assets/PressStart2P.ttf", 24)
         surface.fill(pygame.Color("#000000"))
         text = "Capture the Queen Boid\n"
         text += "by Muhznit\n\n"
         text += "Click to start"
         font_surf = font.render(text, False, "#FFFFFF")
+
+        render_boid(surface, "red", self.boid)
         surface.blit(font_surf, font_surf.get_rect())
-        if self.butterfly_img:
-            surface.blit(self.butterfly_img, self.butterfly_img.get_rect())
 
 
 class StateMachine:
@@ -505,7 +521,6 @@ async def main():
             break
         state_machine.update(dt)
         state_machine.render(MAIN_SURFACE)
-        pygame.draw.circle(MAIN_SURFACE, "#0000FF", (0, 0), 64)
         pygame.display.update()
         await asyncio.sleep(0)
     pygame.quit()
