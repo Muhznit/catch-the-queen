@@ -258,7 +258,6 @@ class StartState(EngineState):
         boid_count = 2
         self.spawn_frequency = 2
         self.spawner_countdown = self.spawn_frequency
-        self.score = 0
         for _ in range(boid_count):
             boid = Boid(self.home_zone.pos.copy())
             boid.pos.x = boid.pos.x + math.cos(_ / boid_count * 2 * math.pi) * 64
@@ -277,6 +276,10 @@ class StartState(EngineState):
         #pygame.event.set_grab(True)
         pygame.mouse.set_visible(False)
 
+    @property
+    def score(self):
+        return len(self.catch_times) - self.hits
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             return
@@ -285,7 +288,6 @@ class StartState(EngineState):
 
 
         if event.type == QUEEN_COLLIDE_EVENT:
-            self.score += 1
             self.catch_times.append(self.duration)
             sprite = Flasher("+1", "green", event.pos)
             sprite.add(self.flasher_sprites)
@@ -403,7 +405,7 @@ class StartState(EngineState):
         font = pygame.font.Font("assets/PressStart2P.ttf", 16)
         text = (
             f"Catch the gold one. Avoid the gray ones.\n"
-            f"Score: {self.score=}\n"
+            f"Score: {self.score}\n"
             f"Time: {self.max_duration - self.duration:.2f}"
         )
         font_surf = font.render(text, False, "#FFFFFF")
