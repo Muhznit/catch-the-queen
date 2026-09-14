@@ -23,4 +23,5 @@ clean: clean-pyc ## Remove python file artifacts and clutter
 unittest: ## Run unit tests
 	@$(PYTHON_EXE) -m unittest -v > /dev/null
 
-ship: ## Push new version, tbd
+ship: venv ## Push new version, tbd
+	@$(PYTHON_EXE) -m pygbag .

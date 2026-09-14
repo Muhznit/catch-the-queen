@@ -1,3 +1,2 @@
 pygame-ce
-pygame_gui
-pygbag==0.9.1
+pygbag
